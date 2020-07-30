@@ -1,8 +1,10 @@
-from flask import Flask, render_template, request, escape
+from flask import Flask, render_template, request, escape, session
 from vsearch import procura_letras
+from checker import check_logged_in
 from DBcm import UseDatabase
 
 app = Flask(__name__)
+app.secret_key = "MeuSenhorJesusCristo"
 
 app.config['dbconfig'] = {'host': '127.0.0.1',
                           'user': 'vsearch',
@@ -10,7 +12,16 @@ app.config['dbconfig'] = {'host': '127.0.0.1',
                           'database': 'vsearchlogDB',}
 
 
+@app.route('/login')
+def do_login() -> str:
+    session['logged_in'] = True
+    return "Você está LOGADO"
 
+
+@app.route('/logout')
+def do_logout() -> str:
+    session.pop('logged_in')
+    return "Você NÃO está mais logado"
 
      
 def log_request(req: 'flask_request',  res: str) -> None:
@@ -48,6 +59,7 @@ def entry_page() -> 'html':
 
 
 @app.route('/verlog')
+@check_logged_in
 def view_the_log() -> 'html':
     """Display the contentes of the log file as a HTML table."""
     with UseDatabase(app.config['dbconfig']) as cursor:
