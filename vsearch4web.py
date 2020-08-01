@@ -1,4 +1,5 @@
 from flask import Flask, render_template, request, escape, session
+from flask import copy_current_request_context
 
 from vsearch import procura_letras
 
@@ -6,6 +7,7 @@ from checker import check_logged_in
 from DBcm import UseDatabase, ConnectionError, CredentialsError, SQLError
 
 from time import sleep
+from threading import Thread
 
 app = Flask(__name__)
 
@@ -28,9 +30,14 @@ def do_logout() -> str:
     session.pop('logged_in')
     return "Você NÃO está mais logado"
 
-def log_request(req: 'flask_request',  res: str) -> None:
-    """Log detils of the web reueste and the reultes. """
-    try:
+
+@app.route('/search4', methods=['POST'])
+def do_search() -> 'html':
+
+    @copy_current_request_context
+    def log_request(req: 'flask_request',  res: str) -> None:
+        """Log detils of the web reueste and the reultes. """
+        sleep(15)  # simulando a domora de 15 segundos para gravar no DB
         with UseDatabase(app.config['dbconfig']) as cursor:
             _SQL = """insert into log
                     (phrase, letters, ip, browser_string, results)
@@ -41,33 +48,21 @@ def log_request(req: 'flask_request',  res: str) -> None:
                                 req.remote_addr,
                                 req.user_agent.browser,
                                 res, ))
-    except ConnectionError as err:
-        print("O seu Banco de Dados está ligado? Erro: ", str(err))
-    except CredentialsError as err:
-        print("Erro de Usuário/Senha. Error: ", str(err))
-    except SQLError as err:
-        print("Sua QUERY está correta?  Error: ", str(err))    
-    except Exception as err:
-        print("Algo deu errado: ", str(err))
-    return "Error"     
 
-
-
-@app.route('/search4', methods=['POST'])
-def do_search() -> 'html':
     frase = request.form['phrase']
     letras = request.form['letters']
     title = "Estes são os seus resultados:"
     results = str(procura_letras(frase, letras))
     try:
-        log_request(request, results)
+        t = Thread(target=log_request, args=(request, results))
+        t.start()
     except  Exception as err:
         print('***** Logging failed with this error', str(err))
     return render_template('results.html',
         the_phrase=frase,
         the_letters=letras,
         the_title=title,
-        the_results=results)
+        the_results=results,)
 
 
 @app.route('/')
